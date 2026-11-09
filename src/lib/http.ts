@@ -6,8 +6,9 @@ export class RequestError extends Error {
 }
 
 export function assertSameOrigin(request: Request) {
-  const expected = new URL(process.env.APP_ORIGIN ?? "http://127.0.0.1:3000").origin;
-  if (request.headers.get("origin") !== expected || new URL(request.url).origin !== expected) {
+  const expected = new URL(process.env.APP_ORIGIN ?? "http://127.0.0.1:3000");
+  // Next.js normalizes loopback request URLs to localhost; Host retains the browser's address.
+  if (request.headers.get("origin") !== expected.origin || request.headers.get("host") !== expected.host) {
     throw new RequestError("Open the app using its configured local address and try again.", 403);
   }
 }
