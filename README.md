@@ -150,7 +150,7 @@ snowball/
 
 ## Contributing
 
-Read [AGENTS.md](AGENTS.md) before making changes. Propose the intended changes, affected files, related tests, risks, and verification commands for approval. Keep edits within the approved scope and present the result for developer review.
+Read the shared instructions in `~/.codex/AGENTS.md` and the Snowball-specific [AGENTS.md](AGENTS.md) in this project root before making changes. The shared file contains the universal approval, review-importance, testing, security, and Git restrictions; the project file contains Snowball README-maintenance requirements. With a custom `CODEX_HOME`, install the shared file there instead. The global file is local to your Codex setup and is not included in this repository; other computers and cloud environments need their own copy. Start a new Codex session after changing instruction files to load the new arrangement. Propose the intended changes, affected files, related tests, risks, and verification commands for approval. Keep edits within the approved scope and present the result for developer review.
 
 Before each commit, review this README and update it when changes affect features, setup, dependencies, configuration, usage, project structure, or limitations. If no documentation change is needed, note that in the change summary. Human contributors should use Conventional Commits. The developer handles commits, pushes, and any publication or deployment; agents must follow the restrictions in `AGENTS.md`.
 
