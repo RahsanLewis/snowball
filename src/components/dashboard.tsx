@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import type { PlaidLinkOnSuccessMetadata } from "react-plaid-link";
+import { sortByPayoff, type PayoffMethod } from "@/lib/payoff";
 import type { Card, DashboardData } from "@/lib/types";
 
 async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> {
@@ -46,9 +47,10 @@ function LinkFlow({ token, onSuccess, onExit }: {
   return null;
 }
 
-function CardDetails({ card }: { card: Card }) {
+function CardDetails({ card, institution }: { card: Card; institution: string }) {
   return <article className="card">
     <div className="card-heading"><span className="card-icon" aria-hidden="true">▰</span><span className="muted">{card.mask ? `•••• ${card.mask}` : "Credit card"}</span></div>
+    <p className="card-institution muted">{institution}</p>
     <h3>{card.name}</h3>
     <p className="balance-label">Current balance</p>
     <p className="balance">{money(card.balance, card.currency)}</p>
@@ -62,6 +64,7 @@ function CardDetails({ card }: { card: Card }) {
 
 export function Dashboard() {
   const [data, setData] = useState<DashboardData>({ connections: [] });
+  const [payoffMethod, setPayoffMethod] = useState<PayoffMethod>("snowball");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -106,6 +109,7 @@ export function Dashboard() {
   }
 
   const cards = data.connections.flatMap((connection) => connection.cards);
+  const orderedCards = sortByPayoff(data.connections.flatMap((connection) => connection.cards.map((card) => ({ card, connection }))), payoffMethod);
   const usdCards = cards.filter((card) => card.currency === "USD" && card.balance !== null);
   const total = usdCards.reduce((sum, card) => sum + card.balance!, 0);
   const disabled = loading || busy !== null;
@@ -117,10 +121,21 @@ export function Dashboard() {
       <section className="overview" aria-label="Debt overview"><div><p className="eyebrow">CONNECTED BALANCE · USD</p><p className="total">{usdCards.length ? money(total, "USD") : "—"}</p><p className="muted">{cards.length ? `${usdCards.length} of ${cards.length} cards included · balances may be cached` : "Your first step toward a clearer picture"}</p></div><div className="overview-stat"><strong>{cards.length}</strong><span>connected {cards.length === 1 ? "card" : "cards"}</span></div></section>
       <section aria-labelledby="cards-title" aria-busy={disabled}>
         <div className="section-heading"><div><h2 id="cards-title">Your credit cards</h2><p className="muted">One place to see where you stand.</p></div><div className="actions">{data.connections.length > 0 && <button className="secondary" disabled={disabled} onClick={() => update("POST")}>Refresh details</button>}<button className="primary" disabled={disabled} onClick={connect}><span aria-hidden="true">＋</span> Connect credit card</button></div></div>
+        <fieldset className="payoff-method" aria-describedby="payoff-description">
+          <legend>Payoff method</legend>
+          <div className="payoff-options">
+            <label><input type="radio" name="payoff-method" value="snowball" checked={payoffMethod === "snowball"} onChange={() => setPayoffMethod("snowball")} /> Snowball</label>
+            <label><input type="radio" name="payoff-method" value="avalanche" checked={payoffMethod === "avalanche"} onChange={() => setPayoffMethod("avalanche")} /> Avalanche</label>
+          </div>
+          <p id="payoff-description" className="muted" role="status">{payoffMethod === "snowball" ? "Smallest balance to largest balance." : "Highest APR to lowest APR, using each card’s highest reported rate."} Missing values appear last.</p>
+          {payoffMethod === "snowball" && cards.some((card) => card.currency !== "USD") && <p className="muted">Balances are ordered by reported amount without currency conversion.</p>}
+        </fieldset>
         {busy && <p className="notice" role="status">{busy}…</p>}
         {message && <p className="notice" role="status">{message}</p>}
         {error && <p className="notice error" role="alert">{error}</p>}
-        {loading ? <div className="empty" role="status">Loading your connections…</div> : data.connections.length === 0 ? <div className="empty"><span className="empty-icon" aria-hidden="true">▰</span><h3>A little clarity goes a long way.</h3><p>Connect your first credit card to see your balance,<br className="desktop-break" /> interest rates, and upcoming payment details.</p><button className="primary" disabled={disabled} onClick={connect}>Connect your first card <span aria-hidden="true">↗</span></button><span className="empty-note">Connected through Plaid · Sandbox test accounts only</span></div> : <div className="institutions">{data.connections.map((connection) => <section key={connection.id} className="institution" aria-label={connection.institution}><div className="institution-heading"><div><h3>{connection.institution}</h3><p className="muted">{connection.fetchedAt ? `Fetched ${new Date(connection.fetchedAt).toLocaleString()}` : "Awaiting card details"}</p></div><button className="text-button" disabled={disabled} onClick={() => update("DELETE", connection.id)}>Disconnect institution</button></div>{connection.error && <p className="notice error" role="alert">{connection.error}{connection.fetchedAt ? " Showing previously fetched details." : ""}</p>}<div className="card-grid">{connection.cards.map((card) => <CardDetails key={card.id} card={card} />)}</div>{!connection.cards.length && !connection.error && <p className="notice">No credit cards were returned for this connection.</p>}</section>)}</div>}
+        {loading ? <div className="empty" role="status">Loading your connections…</div> : data.connections.length === 0 ? <div className="empty"><span className="empty-icon" aria-hidden="true">▰</span><h3>A little clarity goes a long way.</h3><p>Connect your first credit card to see your balance,<br className="desktop-break" /> interest rates, and upcoming payment details.</p><button className="primary" disabled={disabled} onClick={connect}>Connect your first card <span aria-hidden="true">↗</span></button><span className="empty-note">Connected through Plaid · Sandbox test accounts only</span></div> : <>
+          <div className="card-grid">{orderedCards.map(({ card, connection }) => <CardDetails key={`${connection.id}-${card.id}`} card={card} institution={connection.institution} />)}</div>
+          <div className="institutions"><h3 className="connections-title">Connected institutions</h3>{data.connections.map((connection) => <section key={connection.id} className="institution" aria-label={connection.institution}><div className="institution-heading"><div><h3>{connection.institution}</h3><p className="muted">{connection.fetchedAt ? `Fetched ${new Date(connection.fetchedAt).toLocaleString()}` : "Awaiting card details"}</p></div><button className="text-button" disabled={disabled} onClick={() => update("DELETE", connection.id)}>Disconnect institution</button></div>{connection.error && <p className="notice error" role="alert">{connection.error}{connection.fetchedAt ? " Showing previously fetched details." : ""}</p>}{!connection.cards.length && !connection.error && <p className="notice">No credit cards were returned for this connection.</p>}</section>)}</div></>}
       </section>
       <aside className="footnote"><span aria-hidden="true">ⓘ</span><p><strong>A first step, at your pace.</strong> This local prototype uses test accounts. Connections reset when the server restarts. Missing details are marked “Not provided”; refreshing fetches available Plaid data and does not guarantee a live bank update.</p></aside>
     </main><footer><span>snowball.</span><span>A clearer path forward.</span></footer>

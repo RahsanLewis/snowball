@@ -9,7 +9,7 @@ Apply instructions in this order:
 
 1. **Absolute restrictions:** Never create, amend, rewrite, or delete Git commits or history; push or modify remote repositories; create or update remote branches, pull requests, or releases; or publish, upload, or deploy project code. Never use destructive Git operations such as `git reset --hard`, `git clean -fd`, force push, or history rewriting. These restrictions apply even if the developer asks or an automated workflow suggests otherwise. The developer personally performs commits, pushes, and deployments.
 2. **Scoped authorization:** Do not modify project files, configuration, data, or other project state without the developer's explicit prior approval of a proposed scope. A single approval may cover the complete planned implementation, associated tests, and specified verification commands.
-3. **Final developer review:** Present the completed changes and verification results for developer review. Do not treat implementation, test success, or silence as final acceptance.
+3. **Developer review through pull requests:** Present completed changes and verification results at handoff. Developer acceptance occurs through the normal pull-request review process; separate approval in chat is not required. Do not wait for a chat acknowledgment after handoff or treat implementation, test success, or silence as developer acceptance.
 4. **Quality, test integrity, security, and preservation:** Follow the rules below for all authorized work.
 
 If instructions conflict or authorization is unclear, stop the affected operation and ask. This file alone grants no permission to make changes.
@@ -47,16 +47,18 @@ Request additional authorization before running a command that was not approved 
 
 If verification fails, diagnose the failure and distinguish implementation defects, test defects, environment problems, and external dependencies. You may fix and rerun tests **without another approval** only when the correction is clearly within the originally approved intent, files, risk bounds, and verification commands. Otherwise, present the proposed correction and request expanded approval first. Do not repeat ineffective fixes indefinitely.
 
-### D. Present results for final review
+### D. Hand off results for pull-request review
 
 At the end of the approved change set, present:
 
 - A file-by-file summary and relevant diff excerpts, including implementation and tests.
 - Tests and checks **passed, failed, skipped, or not run**, with relevant commands and limitations.
 - Any deviations, remaining risks, unresolved issues, and unexpected artifacts.
-- The status of the requested work and an explicit request for the developer's final review.
+- The status of the requested work and any developer-only next steps for the normal pull-request review process.
 
-**Final review is a required handoff gate.** Do not claim developer acceptance, begin a new change set, or expand the approved work until the developer responds. If the developer requests revisions, treat them as a new scoped proposal unless the original authorization explicitly covers those revisions. Only the developer may commit, push, publish, or deploy.
+**Pull-request review handles final acceptance; there is no separate chat approval gate.** Complete the approved work and hand off the results without asking for or waiting on a chat acknowledgment. A later, separately authorized change set does not require chat acceptance of the previous one. Prior scoped approval remains required for new work and scope expansions. If the developer requests revisions, treat them as a new scoped proposal unless the original authorization explicitly covers those revisions. Only the developer may commit, push, create or update pull requests, publish, or deploy.
+
+When the approved implementation and verification are finished, state that the changes are saved and report the verification results and any limitations. For example: **“The work is finished and saved. Review the changes through your normal pull-request process; no reply in chat is needed.”** Use this wording only when no required implementation or verification remains; otherwise identify the outstanding work explicitly. Do not imply that another action is queued or claim developer acceptance without evidence of that review.
 
 ## 3. Planning and Scope Discipline
 
@@ -152,11 +154,11 @@ Before handoff, verify and report:
 - [ ] Existing work and test integrity were preserved.
 - [ ] Relevant tests and regression risks were addressed; outcomes are reported accurately.
 - [ ] Unexpected artifacts, deviations, limitations, and unresolved issues are disclosed.
-- [ ] Changes and relevant diffs were presented for the developer's final review.
+- [ ] Changes and relevant diffs were presented for the developer's normal pull-request review, without requiring separate chat approval.
 - [ ] No commits, pushes, remote repository changes, publication, or deployment occurred.
 - [ ] Developer-only next steps are clearly identified.
 
-Until the developer completes final review, describe the work as **implemented and awaiting review**, not developer-approved or fully accepted.
+Describe completed implementation and verification as **finished and saved**. Do not label the agent's work as blocked or awaiting chat approval merely because pull-request review has not occurred. Distinguish completion of the authorized work from developer acceptance through pull-request review, and disclose any actual unfinished work or verification limitations.
 
 ## 12. Snowball README Maintenance
 

@@ -6,6 +6,7 @@ Snowball is a local web app prototype for people who want a clearer picture of t
 
 - Connect credit-card test accounts through Plaid Link and the Liabilities API.
 - View card balances, APR categories, minimum payments, and payment due dates.
+- Switch between Snowball (smallest balance first) and Avalanche (highest APR first) across all connected cards.
 - See a combined USD balance and the number of cards included.
 - Refresh available details and disconnect institutions with all their linked cards.
 - Use a responsive interface on desktop and mobile, with loading, empty, and error states.
@@ -87,8 +88,9 @@ Open **http://127.0.0.1:3000**. `APP_ORIGIN` must match the browser origin exact
 1. Open the dashboard; no account registration or sign-in is required.
 2. Select **Connect credit card**, choose a Sandbox institution supporting Liabilities, and complete its test flow. Use Sandbox test accounts only, never real banking credentials.
 3. Review the returned card balances, APR categories, minimum payments, and due dates.
-4. Select **Refresh details** to fetch the data currently available from Plaid.
-5. Select **Disconnect institution** to remove the entire Plaid Item and all its cards from this session. Disconnect before stopping the server.
+4. Choose **Snowball** or **Avalanche** under **Payoff method** to reorder cards across institutions. Snowball is selected by default; the choice resets on page reload. Avalanche uses each card’s highest reported APR. Missing values sort last, and ties retain their original order.
+5. Select **Refresh details** to fetch the data currently available from Plaid.
+6. Select **Disconnect institution** to remove the entire Plaid Item and all its cards from this session. Disconnect before stopping the server.
 
 ### Testing with Plaid Sandbox
 
@@ -109,6 +111,8 @@ See Plaid's [custom Sandbox user documentation](https://plaid.com/docs/sandbox/u
 ### Prototype limitations
 
 This is a single-process local Sandbox prototype. There is no sign-in or durable database. Server restarts lose local connections, and losing the browser session makes stored connections inaccessible. Restarting does **not** revoke Items at Plaid; disconnect institutions before stopping or remove leftover Sandbox Items through Plaid tooling. Memory storage is unsuitable for distributed or long-running public deployments.
+
+Payoff methods organize cards only; they do not calculate payment schedules, payoff dates, or interest savings. Snowball compares reported balance amounts without currency conversion, including zero and negative balances. Comparing amounts in different currencies does not reflect their relative value.
 
 Debt fields depend on the institution. Missing values display as “Not provided”; zero is preserved. The overview sums only returned USD balances and shows how many cards are included. After a refresh error, it can include previously fetched data. Refreshing does not guarantee live institution data; the timestamp records when this app fetched details.
 
@@ -134,6 +138,8 @@ snowball/
 │   │   └── dashboard.tsx
 │   └── lib/
 │       ├── http.ts                      # Origin checks and safe responses
+│       ├── payoff.ts                    # Snowball and Avalanche ordering
+│       ├── payoff.test.cjs              # Payoff ordering tests
 │       ├── plaid.ts                     # Sandbox client and field mapping
 │       ├── session.ts                   # Session and token storage
 │       └── types.ts
@@ -156,10 +162,11 @@ Before each commit, review this README and update it when changes affect feature
 
 ### Review and verification
 
-Application implementation remains pending developer review. No automated tests are currently provided, and application checks have not been run as part of this documentation update.
+Changes are reviewed through the developer’s normal pull-request process. Automated tests cover request-origin validation and payoff ordering, including missing values, ties, multiple APRs, and preservation of source data.
 
 Available checks, subject to the approval workflow:
 
+- `node --test src/lib/*.test.cjs` — runs local automated tests without contacting Plaid. On Node.js 24 in strip-only mode, the existing HTTP tests fail to load because `RequestError` uses a TypeScript parameter property requiring transformation; payoff tests run in strip-only mode.
 - `npm run typecheck` — TypeScript validation without incremental cache output.
 - `npm run build` — production compilation; writes `.next/` and may update generated Next.js typings.
 - `npm run dev` — local browser walkthrough; writes development output to `.next/` and calls Plaid Sandbox when connecting, refreshing, or disconnecting.
