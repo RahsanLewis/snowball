@@ -90,6 +90,22 @@ Open **http://127.0.0.1:3000**. `APP_ORIGIN` must match the browser origin exact
 4. Select **Refresh details** to fetch the data currently available from Plaid.
 5. Select **Disconnect institution** to remove the entire Plaid Item and all its cards from this session. Disconnect before stopping the server.
 
+### Testing with Plaid Sandbox
+
+Use a custom Sandbox test user to test specific card names, balances, and multiple credit cards:
+
+1. Configure your Plaid client ID and **Sandbox** secret in `.env.local` as described in Getting Started. Restart the development server after changing credentials, then open **http://127.0.0.1:3000** (or the exact origin configured in `APP_ORIGIN`). Keep API credentials private; they are not the bank login used in Plaid Link.
+2. In the Plaid Dashboard, open **Build → Sandbox → Users** and create or edit a custom test user. Configure the desired credit-card accounts and liability details, then save the user. Snowball displays accounts with type `credit` and subtype `credit card`.
+3. In **Snowball**, select **Connect credit card** to start its Plaid Link flow.
+4. Choose **First Platypus Bank** or **First Gingham Credit Union**, which Plaid recommends for testing custom users without OAuth.
+5. Enter the saved custom test user's username and any non-empty test password. Do not use real bank credentials. Using the default `user_good` login instead will not select your custom user's data.
+6. Select all intended credit cards and complete Link. Back in Snowball, verify the card names, balances, and connected-card count against your custom user's configuration. Available APRs, minimum payments, and due dates should also appear; missing fields display as “Not provided.”
+7. If you edit the custom user later, disconnect the old institution in Snowball and connect again with that user. Editing a saved custom user does not update existing Plaid Items, and **Refresh details** does not recreate the Item with the new configuration. Disconnecting first also avoids duplicate cards and double-counted balances.
+
+**If custom cards become a generic card after Link:** OAuth institutions such as Chase can replace custom Sandbox data with defaults after the Link flow, even when the expected cards appeared during account selection. This occurred during Snowball testing with Chase; reconnecting through First Platypus Bank resolved it. Use one of the non-OAuth institutions above for this test instead.
+
+See Plaid's [custom Sandbox user documentation](https://plaid.com/docs/sandbox/user-custom/) for configuration instructions and OAuth limitations. Disconnect test institutions before stopping the server; the session and cleanup limitations below still apply.
+
 ### Prototype limitations
 
 This is a single-process local Sandbox prototype. There is no sign-in or durable database. Server restarts lose local connections, and losing the browser session makes stored connections inaccessible. Restarting does **not** revoke Items at Plaid; disconnect institutions before stopping or remove leftover Sandbox Items through Plaid tooling. Memory storage is unsuitable for distributed or long-running public deployments.
