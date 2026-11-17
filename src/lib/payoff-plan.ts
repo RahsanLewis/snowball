@@ -1,4 +1,4 @@
-import type { Card, Connection, PayoffMethod, PayoffPlan, PlanPayment } from "./types";
+import type { Card, Connection, PayoffPlan, PlanPayment } from "./types";
 
 export function validTimeframe(years: unknown, months: unknown): boolean {
   return typeof years === "number" && Number.isInteger(years) && years >= 0 && years <= 100
@@ -14,24 +14,19 @@ export function budgetCents(value: string): number | null {
   return Number.isSafeInteger(cents) && cents > 0 && cents <= 100_000_000 ? cents : null;
 }
 
-export function priorityValue(card: Card, method: PayoffMethod): number | null {
+export function priorityValue(card: Card): number | null {
   if (card.currency !== "USD" || card.balance === null || !Number.isFinite(card.balance) || card.balance <= 0) return null;
-  if (method === "snowball") return card.balance;
-  if (method === "thaw") {
-    return card.creditLimit !== null && Number.isFinite(card.creditLimit) && card.creditLimit > 0
-      ? card.balance / card.creditLimit : null;
-  }
   const rates = card.aprs.map((apr) => apr.percentage).filter((apr) => Number.isFinite(apr) && apr >= 0);
   return rates.length ? Math.max(...rates) : null;
 }
 
-export function prioritizeDebts(connections: Connection[], method: PayoffMethod) {
+export function prioritizeDebts(connections: Connection[]) {
   const entries = connections.flatMap((connection) => connection.cards.map((card) => ({
-    card, connectionId: connection.id, institution: connection.institution, value: priorityValue(card, method),
+    card, connectionId: connection.id, institution: connection.institution, value: priorityValue(card),
   })));
   // Stable ties preserve institution/card order. Unknown values are never treated as zero.
   const ranked = entries.filter((entry) => entry.value !== null).sort((a, b) =>
-    method === "snowball" ? a.value! - b.value! : b.value! - a.value!);
+    b.value! - a.value!);
   return { ranked, unranked: entries.filter((entry) => entry.value === null) };
 }
 
