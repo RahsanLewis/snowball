@@ -28,6 +28,7 @@ Snowball is a local web app prototype for people who want a clearer picture of t
 - Next.js App Router and API route handlers
 - Plaid SDK using Sandbox
 - In-memory, per-session storage with an opaque HttpOnly session cookie
+- Supabase Postgres schema, migrations (Drizzle), and AES-256-GCM token encryption — groundwork for sign-in and durable storage; the app does not use the database yet
 
 Access tokens stay in server memory and are excluded from browser responses. Errors exclude raw Plaid responses and credentials. Mutations require the configured origin, and overlapping session mutations are rejected. Local servers bind to loopback.
 
@@ -38,7 +39,7 @@ Access tokens stay in server memory and are excluded from browser responses. Err
 - Node.js 24 and npm
 - A Plaid account with a client ID and Sandbox secret
 
-There is no database to install or configure.
+The app does not use a database yet. To prepare for the upcoming sign-in and storage work, see [Database setup](#database-setup-in-progress).
 
 ### Installation
 
@@ -75,7 +76,7 @@ PLAID_SECRET=your_plaid_sandbox_secret
 APP_ORIGIN=http://127.0.0.1:3000
 ```
 
-The local environment file is covered by `.gitignore`. Never expose credentials through `NEXT_PUBLIC_` variables or commit secrets. The server always uses Plaid Sandbox and accepts only Sandbox public tokens.
+The local environment file is covered by `.gitignore`. Never expose credentials through `NEXT_PUBLIC_` variables (the Supabase URL and publishable key are the only public values) or commit secrets. The server always uses Plaid Sandbox and accepts only Sandbox public tokens.
 
 **4. Start the development server**
 
@@ -84,6 +85,22 @@ npm run dev
 ```
 
 Open **http://127.0.0.1:3000**. `APP_ORIGIN` must match the browser origin exactly, including the hostname and port. If you use a different port, update the setting to match.
+
+### Database setup (in progress)
+
+Snowball is moving from in-memory sessions to Supabase sign-in and Postgres storage. The schema is ready, but the app does not read or write it yet. To prepare a database:
+
+1. Create a Supabase project (a separate one for development is recommended).
+2. In `.env.local`, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (Project Settings → API), `DATABASE_URL` (transaction pooler, port 6543), and `MIGRATION_DATABASE_URL` (session pooler or direct connection, port 5432). The publishable key is designed to be public; every other value is a secret.
+3. Generate `TOKEN_ENCRYPTION_KEY` and add it to `.env.local`. Keep it out of Supabase; losing it makes stored Plaid tokens unusable.
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   ```
+
+4. Apply the migrations in `drizzle/`: `npx drizzle-kit migrate`. This changes the database.
+
+The tables (`plaid_items`, `payoff_plans`, `account_locks`) have row-level security enabled with no policies, so the browser's public key can't read them; only server code connecting with `DATABASE_URL` can. Access tokens are stored encrypted, bound to their user and Item. `plaid_items` blocks deleting a Supabase user who still has Items, so connected banks are removed at Plaid first.
 
 ## Usage
 
@@ -159,6 +176,9 @@ snowball/
 │   │   ├── globals.css                  # Design tokens, light/dark themes, components
 │   │   ├── layout.tsx                   # Header, status line, shared connection state
 │   │   └── page.tsx                     # Overview
+│   ├── db/
+│   │   ├── client.ts                    # Server-only Postgres connection (Drizzle)
+│   │   └── schema.ts                    # Tables, row-level security, foreign keys
 │   ├── components/
 │   │   ├── app-header.tsx               # Navigation
 │   │   ├── cards.tsx                    # Card list and card detail
@@ -167,6 +187,8 @@ snowball/
 │   │   ├── info-tip.tsx                 # (i) info pop-ups
 │   │   └── payoff-plan.tsx              # Timeframe calculator, saved estimate, plan summary
 │   └── lib/
+│       ├── crypto.ts                    # Access-token encryption (AES-256-GCM)
+│       ├── crypto.test.cjs              # Encryption tests
 │       ├── format.ts                    # Money and date display formatting
 │       ├── format.test.cjs              # Formatting tests
 │       ├── http.ts                      # Origin checks and safe responses
@@ -179,9 +201,11 @@ snowball/
 │       ├── summary.ts                   # Total owed and next payment due
 │       ├── summary.test.cjs             # Overview summary tests
 │       └── types.ts
+├── drizzle/                         # Generated SQL migrations and snapshots
 ├── .env.example
 ├── .gitignore
 ├── AGENTS.md
+├── drizzle.config.ts                # Migration settings (reads .env.local)
 ├── next-env.d.ts
 ├── next.config.ts
 ├── package.json
@@ -198,7 +222,7 @@ Before each commit, review this README and update it when changes affect feature
 
 ### Review and verification
 
-Automated tests cover origin validation, payoff calculations, interest rounding, minimums, Avalanche allocations, input validation and ordering, session-isolated plan API behavior, overview totals and next-payment selection, and display formatting. There are no automated React component tests; check UI behavior in a browser walkthrough. API tests use local mocks and do not contact Plaid. Developer review remains required.
+Automated tests cover origin validation, payoff calculations, interest rounding, minimums, Avalanche allocations, input validation and ordering, session-isolated plan API behavior, overview totals and next-payment selection, display formatting, and access-token encryption (tampering, wrong keys, and tokens moved between users are rejected). There are no automated React component tests; check UI behavior in a browser walkthrough. API tests use local mocks and do not contact Plaid. Developer review remains required.
 
 Available checks, subject to the approval workflow:
 
@@ -206,6 +230,8 @@ Available checks, subject to the approval workflow:
 - `npm run typecheck` — TypeScript validation without incremental cache output.
 - `npm run build` — production compilation; writes `.next/` and may update generated Next.js typings.
 - `npm run dev` — local browser walkthrough; writes development output to `.next/` and calls Plaid Sandbox when connecting, refreshing, or disconnecting.
+- `npx drizzle-kit generate` — writes a new migration to `drizzle/` after schema changes; needs no database.
+- `npx drizzle-kit migrate` — applies migrations to the database in `MIGRATION_DATABASE_URL` (or `DATABASE_URL`).
 
 ## License
 
