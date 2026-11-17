@@ -5,12 +5,13 @@ Snowball is a local web app prototype for people who want a clearer picture of t
 ## Features
 
 - Connect credit-card test accounts through Plaid Link and the Liabilities API.
-- View card balances, APR categories, minimum payments, and payment due dates.
-- See a combined USD balance and the number of cards included.
-- Refresh available details and disconnect institutions with all their linked cards.
-- Calculate a session-only Avalanche payoff plan by choosing a payoff month and year.
+- See what matters at a glance on the overview: total USD owed, your payoff plan's monthly payment, and the next payment due.
+- Browse cards by institution on the **Cards** page, and open a card for its balance, credit limit, APRs, minimum payment, due date, and last-fetched time.
+- Refresh available details and disconnect institutions (with confirmation) with all their linked cards.
+- Calculate a session-only Avalanche payoff plan on the **Plan** page by choosing a payoff month and year.
 - Review the estimated monthly payment, interest, total paid, and first-month allocations; adjust the timeframe and recalculate before saving.
-- Use a responsive interface on desktop and mobile, with loading, empty, and error states.
+- Find calculation assumptions, data notes, and session limitations on the **About** page and in small (i) info pop-ups instead of on the main screens.
+- Use a minimal, responsive interface with automatic light and dark mode.
 
 ## Tech Stack
 
@@ -86,15 +87,15 @@ Open **http://127.0.0.1:3000**. `APP_ORIGIN` must match the browser origin exact
 
 ## Usage
 
-1. Open the dashboard; no account registration or sign-in is required.
-2. Select **Connect credit card**, choose a Sandbox institution supporting Liabilities, and complete its test flow. Use Sandbox test accounts only, never real banking credentials.
-3. Review the returned card balances, APR categories, minimum payments, and due dates.
-4. Select **Refresh details** to fetch the data currently available from Plaid.
-5. Select **Disconnect institution** to remove the entire Plaid Item and all its cards from this session. Disconnect before stopping the server.
+1. Open the app; no account registration or sign-in is required. Use the header to move between **Overview**, **Cards**, **Plan**, and **About** (the **?** icon).
+2. Select **Connect credit card** on the overview (or **Connect card** on the Cards page), choose a Sandbox institution supporting Liabilities, and complete its test flow. Use Sandbox test accounts only, never real banking credentials.
+3. The overview shows the total owed, your payoff plan, and the next payment due. Open **Cards** and select a card to review its balance, APR categories, minimum payment, and due date.
+4. Select **Refresh** on the Cards page to fetch the data currently available from Plaid.
+5. To remove an institution's Plaid Item and all its cards from this session, open one of its cards and select **Disconnect**, then confirm. An institution that returned no cards shows **Disconnect** on the Cards page instead. Disconnect before stopping the server.
 
 ### Payoff plan calculator
 
-Connect your cards and select **Set up your payoff plan**. Use the year arrows or year dropdown, then choose a month from the grid (for example, November 2027). The selected date and number of months away appear beneath it. Unavailable months are disabled. Tab into the month grid and use arrow keys to select a month; Space or Enter selects the focused month. Then select **Calculate monthly payment**. Review the estimated monthly payment, interest, total paid, target month, and first-month payment allocation. Use **Adjust payoff month** to explore a different payment, or **Save plan** to keep the reviewed estimate. There is no manual budget entry or method selector: plans always use **Avalanche**.
+Connect your cards, open **Plan**, and select **Set up plan**. Use the year arrows or year dropdown, then choose a month from the grid (for example, November 2027). The selected date and number of months away appear beneath it. Unavailable months are disabled. Tab into the month grid and use arrow keys to select a month; Space or Enter selects the focused month. Then select **Calculate payment**. Review the estimated monthly payment, interest, total paid, target month, and first-month payment allocation. Use **Change month** to explore a different payment, or **Save plan** to keep the reviewed estimate. There is no manual budget entry or method selector: plans always use **Avalanche**.
 
 The calculator models each month in cents: add interest, cover every card's minimum, then allocate remaining money to the highest-APR debt. Money freed by paying off a card goes to the next card. The server searches for the lowest constant monthly payment that clears all modeled balances within the timeframe while covering minimums. The final payment may be smaller. Minimum payments can cause payoff earlier than the requested target. Equal APRs preserve institution/card order.
 
@@ -103,7 +104,7 @@ The calculator models each month in cents: add interest, cover every card's mini
 - Each card's highest reported APR is applied to its entire balance, including when that rate relates to a different balance category. APRs remain unchanged. Monthly interest uses APR divided by 12, rounded to cents; actual issuers may calculate daily interest differently.
 - Reported minimums remain constant until capped by the remaining balance plus interest. The app does not yet model issuer minimum-payment formulas.
 - The first payment occurs one month after the calculation month, with subsequent monthly payments. There are no new purchases, fees, or missed payments. Payment due dates are not used to schedule payments.
-- Positive debts must have USD balances, usable APRs, and reported minimum payments. Missing or invalid inputs prevent a complete estimate instead of silently omitting debts. Known zero or credit balances require no payment. Failed refreshes can leave cached data; the dashboard identifies this limitation.
+- Positive debts must have USD balances, usable APRs, and reported minimum payments. Missing or invalid inputs prevent a complete estimate instead of silently omitting debts. Known zero or credit balances require no payment. Failed refreshes can leave cached data; the Plan page identifies this limitation.
 - The payoff-month picker accepts next month through 100 years ahead. Current and past months, malformed dates, and dates beyond that range are rejected on both client and server. The server converts the selected month into the number of monthly payments using the UTC calculation month. Monetary calculations are bounded to $10 billion and APRs to 0–1,000%; unsupported values produce an error.
 
 Results are estimates, not guaranteed payoff outcomes. The app does not schedule or make payments. A longer timeframe generally lowers the monthly payment but may increase interest. Choose a timeframe whose calculated payment fits your budget.
@@ -150,19 +151,33 @@ snowball/
 │   │   │   └── plaid/
 │   │   │       ├── exchange/route.ts     # Exchange tokens and fetch details
 │   │   │       └── link-token/route.ts   # Create a Liabilities Link token
-│   │   ├── globals.css
-│   │   ├── layout.tsx
-│   │   └── page.tsx
+│   │   ├── about/page.tsx               # Assumptions, data, sandbox, and session notes
+│   │   ├── cards/
+│   │   │   ├── page.tsx                 # Cards grouped by institution
+│   │   │   └── [id]/page.tsx            # One card's details and disconnect
+│   │   ├── plan/page.tsx                # Payoff plan calculator
+│   │   ├── globals.css                  # Design tokens, light/dark themes, components
+│   │   ├── layout.tsx                   # Header, status line, shared connection state
+│   │   └── page.tsx                     # Overview
 │   ├── components/
-│   │   ├── payoff-plan.tsx              # Timeframe calculator and saved estimate
-│   │   └── dashboard.tsx
+│   │   ├── app-header.tsx               # Navigation
+│   │   ├── cards.tsx                    # Card list and card detail
+│   │   ├── connections-provider.tsx     # Shared connections, Plaid Link, status messages
+│   │   ├── dashboard.tsx                # Overview: total, plan summary, next payment
+│   │   ├── info-tip.tsx                 # (i) info pop-ups
+│   │   └── payoff-plan.tsx              # Timeframe calculator, saved estimate, plan summary
 │   └── lib/
+│       ├── format.ts                    # Money and date display formatting
+│       ├── format.test.cjs              # Formatting tests
 │       ├── http.ts                      # Origin checks and safe responses
+│       ├── http.test.cjs                # Origin validation tests
 │       ├── plaid.ts                     # Sandbox client and field mapping
 │       ├── payoff-plan.ts               # Validation, allocation, and payoff simulation
 │       ├── payoff-plan.test.cjs         # Calculator and ranking tests
 │       ├── payoff-plan-api.test.cjs     # API and session isolation tests
 │       ├── session.ts                   # Session and token storage
+│       ├── summary.ts                   # Total owed and next payment due
+│       ├── summary.test.cjs             # Overview summary tests
 │       └── types.ts
 ├── .env.example
 ├── .gitignore
@@ -183,7 +198,7 @@ Before each commit, review this README and update it when changes affect feature
 
 ### Review and verification
 
-Automated tests cover origin validation, payoff calculations, interest rounding, minimums, Avalanche allocations, input validation and ordering, and session-isolated plan API behavior. API tests use local mocks and do not contact Plaid. Developer review remains required.
+Automated tests cover origin validation, payoff calculations, interest rounding, minimums, Avalanche allocations, input validation and ordering, session-isolated plan API behavior, overview totals and next-payment selection, and display formatting. There are no automated React component tests; check UI behavior in a browser walkthrough. API tests use local mocks and do not contact Plaid. Developer review remains required.
 
 Available checks, subject to the approval workflow:
 
