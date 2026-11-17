@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import type { PlaidLinkOnSuccessMetadata } from "react-plaid-link";
 import type { Card, DashboardData } from "@/lib/types";
+import { PayoffPlanPanel } from "./payoff-plan";
 
 async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const response = await fetch(path, {
@@ -29,7 +30,7 @@ function dueDate(value: string | null) {
 
 function LinkFlow({ token, onSuccess, onExit }: {
   token: string;
-  onSuccess: (token: string, metadata: PlaidLinkOnSuccessMetadata) => void;
+  onSuccess: (token: string | null, metadata: PlaidLinkOnSuccessMetadata) => void;
   onExit: (message: string) => void;
 }) {
   const { open, ready, error } = usePlaidLink({
@@ -80,7 +81,8 @@ export function Dashboard() {
     setLinkToken(null); setBusy(null); setMessage(message);
   }, []);
 
-  const connected = useCallback(async (publicToken: string, metadata: PlaidLinkOnSuccessMetadata) => {
+  const connected = useCallback(async (publicToken: string | null, metadata: PlaidLinkOnSuccessMetadata) => {
+    if (!publicToken) { setLinkToken(null); setBusy(null); setError("Plaid did not return a connection token. Please connect again."); return; }
     setLinkToken(null); setBusy("Saving connection");
     try {
       setData(await api<DashboardData>("/api/plaid/exchange", "POST", { publicToken, institution: metadata.institution?.name }));
@@ -115,6 +117,7 @@ export function Dashboard() {
     <main>
       <div className="intro"><div><p className="eyebrow">SMALL STEPS. REAL PROGRESS.</p><h1>Your fresh start<br />starts with clarity.</h1><p className="intro-copy">Bring your credit cards into one place.<br />Get a clear picture of what you owe.</p></div><div className="orbit" aria-hidden="true"><div /><div /><div /><span>↗</span></div></div>
       <section className="overview" aria-label="Debt overview"><div><p className="eyebrow">CONNECTED BALANCE · USD</p><p className="total">{usdCards.length ? money(total, "USD") : "—"}</p><p className="muted">{cards.length ? `${usdCards.length} of ${cards.length} cards included · balances may be cached` : "Your first step toward a clearer picture"}</p></div><div className="overview-stat"><strong>{cards.length}</strong><span>connected {cards.length === 1 ? "card" : "cards"}</span></div></section>
+      <PayoffPlanPanel connections={data.connections} />
       <section aria-labelledby="cards-title" aria-busy={disabled}>
         <div className="section-heading"><div><h2 id="cards-title">Your credit cards</h2><p className="muted">One place to see where you stand.</p></div><div className="actions">{data.connections.length > 0 && <button className="secondary" disabled={disabled} onClick={() => update("POST")}>Refresh details</button>}<button className="primary" disabled={disabled} onClick={connect}><span aria-hidden="true">＋</span> Connect credit card</button></div></div>
         {busy && <p className="notice" role="status">{busy}…</p>}

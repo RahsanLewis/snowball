@@ -1,10 +1,10 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
-import type { Connection } from "./types";
+import type { Connection, PayoffPlan } from "./types";
 
 export type StoredConnection = Connection & { accessToken: string };
-type Session = { id: string; connections: Map<string, StoredConnection>; busy: boolean };
+type Session = { id: string; connections: Map<string, StoredConnection>; busy: boolean; payoffPlan?: PayoffPlan };
 
 // Preserve local sessions across development hot reloads. Never persist tokens to disk.
 const globalStore = globalThis as typeof globalThis & { snowballSessions?: Map<string, Session> };

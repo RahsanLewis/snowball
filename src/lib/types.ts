@@ -3,6 +3,7 @@ export type Card = {
   name: string;
   mask: string | null;
   balance: number | null;
+  creditLimit: number | null;
   currency: string | null;
   minimumPayment: number | null;
   dueDate: string | null;
@@ -18,3 +19,28 @@ export type Connection = {
 };
 
 export type DashboardData = { connections: Connection[] };
+
+export type PayoffMethod = "avalanche" | "snowball" | "thaw";
+export type PlanPayment = {
+  connectionId: string;
+  cardId: string;
+  name: string;
+  mask: string | null;
+  institution: string;
+  apr: number;
+  paymentCents: number;
+};
+export type PayoffPlan = {
+  version: 2;
+  years: number;
+  months: number;
+  startMonth: string;
+  targetMonth: string;
+  estimatedPayoffMonth: string;
+  monthlyBudgetCents: number;
+  interestCents: number;
+  totalPaidCents: number;
+  method: "avalanche";
+  initialPayments: PlanPayment[];
+  sourceFingerprint: string;
+};
