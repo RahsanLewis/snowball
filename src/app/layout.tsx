@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { AppHeader } from "@/components/app-header";
+import { ConnectionsProvider, StatusLine } from "@/components/connections-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -7,5 +9,10 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en"><body>
+    <ConnectionsProvider>
+      <AppHeader />
+      <main className="page"><StatusLine />{children}</main>
+    </ConnectionsProvider>
+  </body></html>;
 }
