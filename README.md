@@ -6,9 +6,10 @@ Snowball is a local web app prototype for people who want a clearer picture of t
 
 - Connect credit-card test accounts through Plaid Link and the Liabilities API.
 - View card balances, APR categories, minimum payments, and payment due dates.
-- Switch between Snowball (smallest balance first) and Avalanche (highest APR first) across all connected cards.
 - See a combined USD balance and the number of cards included.
 - Refresh available details and disconnect institutions with all their linked cards.
+- Calculate a session-only Avalanche payoff plan by choosing a payoff month and year.
+- Review the estimated monthly payment, interest, total paid, and first-month allocations; adjust the timeframe and recalculate before saving.
 - Use a responsive interface on desktop and mobile, with loading, empty, and error states.
 
 ## Tech Stack
@@ -88,9 +89,28 @@ Open **http://127.0.0.1:3000**. `APP_ORIGIN` must match the browser origin exact
 1. Open the dashboard; no account registration or sign-in is required.
 2. Select **Connect credit card**, choose a Sandbox institution supporting Liabilities, and complete its test flow. Use Sandbox test accounts only, never real banking credentials.
 3. Review the returned card balances, APR categories, minimum payments, and due dates.
-4. Choose **Snowball** or **Avalanche** under **Payoff method** to reorder cards across institutions. Snowball is selected by default; the choice resets on page reload. Avalanche uses each card’s highest reported APR. Missing values sort last, and ties retain their original order.
-5. Select **Refresh details** to fetch the data currently available from Plaid.
-6. Select **Disconnect institution** to remove the entire Plaid Item and all its cards from this session. Disconnect before stopping the server.
+4. Select **Refresh details** to fetch the data currently available from Plaid.
+5. Select **Disconnect institution** to remove the entire Plaid Item and all its cards from this session. Disconnect before stopping the server.
+
+### Payoff plan calculator
+
+Connect your cards and select **Set up your payoff plan**. Use the year arrows or year dropdown, then choose a month from the grid (for example, November 2027). The selected date and number of months away appear beneath it. Unavailable months are disabled. Tab into the month grid and use arrow keys to select a month; Space or Enter selects the focused month. Then select **Calculate monthly payment**. Review the estimated monthly payment, interest, total paid, target month, and first-month payment allocation. Use **Adjust payoff month** to explore a different payment, or **Save plan** to keep the reviewed estimate. There is no manual budget entry or method selector: plans always use **Avalanche**.
+
+The calculator models each month in cents: add interest, cover every card's minimum, then allocate remaining money to the highest-APR debt. Money freed by paying off a card goes to the next card. The server searches for the lowest constant monthly payment that clears all modeled balances within the timeframe while covering minimums. The final payment may be smaller. Minimum payments can cause payoff earlier than the requested target. Equal APRs preserve institution/card order.
+
+**Calculation assumptions:**
+
+- Each card's highest reported APR is applied to its entire balance, including when that rate relates to a different balance category. APRs remain unchanged. Monthly interest uses APR divided by 12, rounded to cents; actual issuers may calculate daily interest differently.
+- Reported minimums remain constant until capped by the remaining balance plus interest. The app does not yet model issuer minimum-payment formulas.
+- The first payment occurs one month after the calculation month, with subsequent monthly payments. There are no new purchases, fees, or missed payments. Payment due dates are not used to schedule payments.
+- Positive debts must have USD balances, usable APRs, and reported minimum payments. Missing or invalid inputs prevent a complete estimate instead of silently omitting debts. Known zero or credit balances require no payment. Failed refreshes can leave cached data; the dashboard identifies this limitation.
+- The payoff-month picker accepts next month through 100 years ahead. Current and past months, malformed dates, and dates beyond that range are rejected on both client and server. The server converts the selected month into the number of monthly payments using the UTC calculation month. Monetary calculations are bounded to $10 billion and APRs to 0–1,000%; unsupported values produce an error.
+
+Results are estimates, not guaranteed payoff outcomes. The app does not schedule or make payments. A longer timeframe generally lowers the monthly payment but may increase interest. Choose a timeframe whose calculated payment fits your budget.
+
+Preview and save both calculate on the server. A changed calculation requires a new preview before saving; browser-supplied payment amounts or methods are rejected. The saved target is a fixed calendar month (UTC), not a continuously moving duration. After card data or the calculation month changes, the prior estimate is flagged for recalculation rather than silently replaced. Recalculation initially preserves the target month when it is still in the future; an elapsed target defaults to next month for review. Old manually entered plans require recalculation and are not represented as forecasts.
+
+Plans are stored only in the existing server-memory session, remain available on page reload with the same session cookie, and are lost or inaccessible after server restart or cookie loss. No plan data is written to a database or browser local storage. Calculating or saving a plan does not call Plaid.
 
 ### Testing with Plaid Sandbox
 
@@ -112,11 +132,9 @@ See Plaid's [custom Sandbox user documentation](https://plaid.com/docs/sandbox/u
 
 This is a single-process local Sandbox prototype. There is no sign-in or durable database. Server restarts lose local connections, and losing the browser session makes stored connections inaccessible. Restarting does **not** revoke Items at Plaid; disconnect institutions before stopping or remove leftover Sandbox Items through Plaid tooling. Memory storage is unsuitable for distributed or long-running public deployments.
 
-Payoff methods organize cards only; they do not calculate payment schedules, payoff dates, or interest savings. Snowball compares reported balance amounts without currency conversion, including zero and negative balances. Comparing amounts in different currencies does not reflect their relative value.
-
 Debt fields depend on the institution. Missing values display as “Not provided”; zero is preserved. The overview sums only returned USD balances and shows how many cards are included. After a refresh error, it can include previously fetched data. Refreshing does not guarantee live institution data; the timestamp records when this app fetched details.
 
-Reconnecting the same institution can create duplicate Items/cards and double-count balances. Disconnect the earlier connection first. OAuth redirect/resume flows, automatic updates/webhooks, production access, persistent authentication/storage, and payoff calculations are future work.
+Reconnecting the same institution can create duplicate Items/cards and double-count balances. Disconnect the earlier connection first. OAuth redirect/resume flows, automatic updates/webhooks, production access, persistent authentication/storage, issuer-specific minimum-payment formulas, and payment scheduling are future work.
 
 See the [Plaid Quickstart](https://plaid.com/docs/quickstart/), [Liabilities documentation](https://plaid.com/docs/liabilities/), and [Sandbox documentation](https://plaid.com/docs/sandbox/) for integration and test-flow details.
 
@@ -127,6 +145,7 @@ snowball/
 ├── src/
 │   ├── app/
 │   │   ├── api/
+│   │   │   ├── payoff-plan/route.ts     # Read and save session payoff plan
 │   │   │   ├── connections/route.ts      # Read, refresh, and disconnect
 │   │   │   └── plaid/
 │   │   │       ├── exchange/route.ts     # Exchange tokens and fetch details
@@ -135,12 +154,14 @@ snowball/
 │   │   ├── layout.tsx
 │   │   └── page.tsx
 │   ├── components/
+│   │   ├── payoff-plan.tsx              # Timeframe calculator and saved estimate
 │   │   └── dashboard.tsx
 │   └── lib/
 │       ├── http.ts                      # Origin checks and safe responses
-│       ├── payoff.ts                    # Snowball and Avalanche ordering
-│       ├── payoff.test.cjs              # Payoff ordering tests
 │       ├── plaid.ts                     # Sandbox client and field mapping
+│       ├── payoff-plan.ts               # Validation, allocation, and payoff simulation
+│       ├── payoff-plan.test.cjs         # Calculator and ranking tests
+│       ├── payoff-plan-api.test.cjs     # API and session isolation tests
 │       ├── session.ts                   # Session and token storage
 │       └── types.ts
 ├── .env.example
@@ -162,11 +183,11 @@ Before each commit, review this README and update it when changes affect feature
 
 ### Review and verification
 
-Changes are reviewed through the developer’s normal pull-request process. Automated tests cover request-origin validation and payoff ordering, including missing values, ties, multiple APRs, and preservation of source data.
+Automated tests cover origin validation, payoff calculations, interest rounding, minimums, Avalanche allocations, input validation and ordering, and session-isolated plan API behavior. API tests use local mocks and do not contact Plaid. Developer review remains required.
 
 Available checks, subject to the approval workflow:
 
-- `node --test src/lib/*.test.cjs` — runs local automated tests without contacting Plaid. On Node.js 24 in strip-only mode, the existing HTTP tests fail to load because `RequestError` uses a TypeScript parameter property requiring transformation; payoff tests run in strip-only mode.
+- `node --conditions=react-server --experimental-transform-types --test src/lib/*.test.cjs` — local unit and API tests; transforms TypeScript in memory.
 - `npm run typecheck` — TypeScript validation without incremental cache output.
 - `npm run build` — production compilation; writes `.next/` and may update generated Next.js typings.
 - `npm run dev` — local browser walkthrough; writes development output to `.next/` and calls Plaid Sandbox when connecting, refreshing, or disconnecting.

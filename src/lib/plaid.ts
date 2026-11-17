@@ -22,6 +22,7 @@ export async function refreshConnection(connection: StoredConnection) {
       name: account.name,
       mask: account.mask,
       balance: account.balances.current,
+      creditLimit: account.balances.limit ?? null,
       currency: account.balances.iso_currency_code ?? account.balances.unofficial_currency_code ?? null,
       minimumPayment: liability?.minimum_payment_amount ?? null,
       dueDate: liability?.next_payment_due_date ?? null,
