@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     return await withSessionLock(session, async () => {
       const connections = publicConnections(session);
       let result;
-      try { result = calculatePlan(connections, Math.floor(duration / 12), duration % 12, now); }
+      try { result = calculatePlan(connections, duration, now); }
       catch (error) { throw new RequestError(error instanceof Error ? error.message : "Couldn’t calculate your plan."); }
       const estimate = { ...result, sourceFingerprint: fingerprint(connections) };
       const quote = quoteFor(estimate);

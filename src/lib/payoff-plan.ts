@@ -1,34 +1,4 @@
-import type { Card, Connection, PayoffPlan, PlanPayment } from "./types";
-
-export function validTimeframe(years: unknown, months: unknown): boolean {
-  return typeof years === "number" && Number.isInteger(years) && years >= 0 && years <= 100
-    && typeof months === "number" && Number.isInteger(months) && months >= 0 && months <= 11
-    && years * 12 + months > 0 && years * 12 + months <= 1200;
-}
-
-// Parse decimal currency directly into cents; reject exponent notation and fractions of a cent.
-export function budgetCents(value: string): number | null {
-  if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return null;
-  const [whole, fraction = ""] = value.split(".");
-  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  return Number.isSafeInteger(cents) && cents > 0 && cents <= 100_000_000 ? cents : null;
-}
-
-export function priorityValue(card: Card): number | null {
-  if (card.currency !== "USD" || card.balance === null || !Number.isFinite(card.balance) || card.balance <= 0) return null;
-  const rates = card.aprs.map((apr) => apr.percentage).filter((apr) => Number.isFinite(apr) && apr >= 0);
-  return rates.length ? Math.max(...rates) : null;
-}
-
-export function prioritizeDebts(connections: Connection[]) {
-  const entries = connections.flatMap((connection) => connection.cards.map((card) => ({
-    card, connectionId: connection.id, institution: connection.institution, value: priorityValue(card),
-  })));
-  // Stable ties preserve institution/card order. Unknown values are never treated as zero.
-  const ranked = entries.filter((entry) => entry.value !== null).sort((a, b) =>
-    b.value! - a.value!);
-  return { ranked, unranked: entries.filter((entry) => entry.value === null) };
-}
+import type { Connection, PayoffPlan, PlanPayment } from "./types";
 
 export function monthKey(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -78,6 +48,7 @@ function debtsForCalculation(connections: Connection[]): Debt[] {
   if (issues.length) throw new Error(`A complete estimate needs more card information. ${issues.join("; ")}. Refresh card details and try again.`);
   if (!debts.length) throw new Error("Connect a card with a positive USD balance to calculate a payoff plan. There is no debt to model yet.");
   if (!safeCents(debts.reduce((sum, debt) => sum + debt.balanceCents, 0))) throw new Error("The combined balance is outside the supported calculation range.");
+  // Stable sort: equal APRs keep institution/card order.
   return debts.sort((a, b) => b.apr - a.apr);
 }
 
@@ -112,10 +83,9 @@ function simulate(debts: Debt[], budget: number, months: number) {
   return null;
 }
 
-export function calculatePlan(connections: Connection[], years: number, months: number, now = new Date()): Omit<PayoffPlan, "sourceFingerprint"> {
-  if (!validTimeframe(years, months)) throw new Error("Choose a timeframe from 1 month to 100 years, with whole years and 0–11 additional months.");
+export function calculatePlan(connections: Connection[], duration: number, now = new Date()): Omit<PayoffPlan, "sourceFingerprint"> {
+  if (!Number.isInteger(duration) || duration < 1 || duration > 1200) throw new Error("Choose a payoff timeframe from 1 month to 100 years.");
   const debts = debtsForCalculation(connections);
-  const duration = years * 12 + months;
   let low = 0;
   // Paying every balance plus one month's interest is a guaranteed feasible upper bound.
   let high = debts.reduce((sum, debt) => sum + debt.balanceCents + Math.round(debt.balanceCents * debt.apr / 1200), 0);
@@ -128,7 +98,7 @@ export function calculatePlan(connections: Connection[], years: number, months: 
   const result = simulate(debts, low, duration);
   if (!result) throw new Error("Could not calculate a payoff plan within the supported range.");
   const startMonth = monthKey(now);
-  return { version: 2, years, months, startMonth, targetMonth: addMonths(startMonth, duration),
+  return { version: 2, years: Math.floor(duration / 12), months: duration % 12, startMonth, targetMonth: addMonths(startMonth, duration),
     estimatedPayoffMonth: addMonths(startMonth, result.payoffMonths), monthlyBudgetCents: low,
     interestCents: result.interestCents, totalPaidCents: result.totalPaidCents,
     method: "avalanche", initialPayments: result.initialPayments };
