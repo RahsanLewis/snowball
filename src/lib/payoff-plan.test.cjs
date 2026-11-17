@@ -5,30 +5,27 @@ const { budgetCents, validTimeframe, calculatePlan, addMonths, monthsUntilTarget
 const card = (id, balance, apr, limit) => ({ id, name: id, mask: null, balance, creditLimit: limit, currency: "USD", minimumPayment: 25, dueDate: null, aprs: apr === null ? [] : [{ percentage: apr, type: "purchase_apr" }] });
 const connections = [{ id: "one", institution: "One", cards: [card("large", 4000, 25, 10000), card("small", 900, 15, 1000)] }, { id: "two", institution: "Two", cards: [card("middle", 2000, 30, 5000)] }];
 
-test("methods order debts across institutions using their distinct criteria", () => {
-  const ids = (method) => prioritizeDebts(connections, method).ranked.map(({ card }) => card.id);
-  assert.deepEqual(ids("avalanche"), ["middle", "large", "small"]);
-  assert.deepEqual(ids("snowball"), ["small", "middle", "large"]);
-  assert.deepEqual(ids("thaw"), ["small", "large", "middle"]);
+test("Avalanche orders debts across institutions by highest APR without mutating source order", () => {
+  const ranked = prioritizeDebts(connections).ranked.map(({ card }) => card.id);
+  assert.deepEqual(ranked, ["middle", "large", "small"]);
   assert.equal(connections[0].cards[0].id, "large", "does not mutate source order");
 });
 
-test("Thaw handles over-limit balances, stable ties, and missing/zero/invalid limits", () => {
-  const cards = [card("tie1", 100, 0, 200), card("over", 300, 0, 200), card("tie2", 50, 0, 100), ...[null, 0, -1, Infinity, NaN].map((limit, i) => card(`invalid${i}`, 100, 10, limit))];
-  const result = prioritizeDebts([{ ...connections[0], cards }], "thaw");
-  assert.deepEqual(result.ranked.map(({ card }) => card.id), ["over", "tie1", "tie2"]);
-  assert.equal(result.ranked[0].value, 1.5);
-  assert.equal(result.unranked.length, 5);
+test("equal APRs preserve source order regardless of balance or credit limit", () => {
+  const cards = [card("tie1", 100, 20, null), card("highest", 300, 30, 200), card("tie2", 50, 20, 100), card("tie3", 1000, 20, 0)];
+  const result = prioritizeDebts([{ ...connections[0], cards }]);
+  assert.deepEqual(result.ranked.map(({ card }) => card.id), ["highest", "tie1", "tie2", "tie3"]);
+  assert.equal(result.unranked.length, 0);
 });
 
 test("unknown values never silently rank as zero; zero APR is valid", () => {
   const highest = card("highest", 100, 5, 1000);
   highest.aprs.push({ percentage: 29, type: "cash_apr" });
   const cards = [card("zeroAPR", 100, 0, 1000), highest, card("noAPR", 100, null, 1000), ...[null, 0, -50, Infinity, NaN].map((balance, i) => card(`balance${i}`, balance, 10, 1000)), { ...card("foreign", 100, 10, 1000), currency: "EUR" }];
-  const result = prioritizeDebts([{ ...connections[0], cards }], "avalanche");
+  const result = prioritizeDebts([{ ...connections[0], cards }]);
   assert.deepEqual(result.ranked.map(({ card }) => card.id), ["highest", "zeroAPR"]);
   assert.equal(result.unranked.length, 7);
-  assert.deepEqual(prioritizeDebts([], "snowball"), { ranked: [], unranked: [] });
+  assert.deepEqual(prioritizeDebts([]), { ranked: [], unranked: [] });
 });
 
 test("timeframe accepts whole years and months within the disclosed range", () => {

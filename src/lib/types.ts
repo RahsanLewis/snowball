@@ -20,7 +20,7 @@ export type Connection = {
 
 export type DashboardData = { connections: Connection[] };
 
-export type PayoffMethod = "avalanche" | "snowball" | "thaw";
+export type PayoffMethod = "avalanche";
 export type PlanPayment = {
   connectionId: string;
   cardId: string;
