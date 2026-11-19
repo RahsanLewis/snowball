@@ -57,7 +57,8 @@ export function useConnections(): Connections {
   return value;
 }
 
-export function ConnectionsProvider({ children }: { children: ReactNode }) {
+// Loads connections only for a signed-in user, and clears them on sign-out.
+export function ConnectionsProvider({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   const [data, setData] = useState<DashboardData>({ connections: [] });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -69,12 +70,15 @@ export function ConnectionsProvider({ children }: { children: ReactNode }) {
   useEffect(() => { path.current = pathname; }, [pathname]);
 
   useEffect(() => {
+    setData({ connections: [] }); setError(""); setMessage(null);
+    if (!enabled) { setLoading(false); return; }
     let active = true;
+    setLoading(true);
     api<DashboardData>("/api/connections").then((data) => { if (active) setData(data); })
       .catch(() => { if (active) setError("Couldn’t load your connections. Reload this page to try again."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [enabled]);
 
   const finishLink = useCallback((text: string) => {
     setLinkToken(null); setBusy(null); setMessage({ text, path: path.current });

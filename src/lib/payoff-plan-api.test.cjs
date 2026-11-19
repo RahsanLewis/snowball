@@ -4,14 +4,12 @@ const { registerHooks } = require("node:module");
 const { pathToFileURL } = require("node:url");
 const path = require("node:path");
 
-let cookie;
-globalThis.__payoffTestCookies = {
-  get: () => cookie ? { value: cookie } : undefined,
-  set: (_name, value) => { cookie = value; },
-};
+// The signed-in user is faked at the Supabase client; auth.ts and session.ts run for real.
+let user;
+globalThis.__payoffTestAuth = { getClaims: async () => ({ data: user ? { claims: { sub: user } } : null, error: null }) };
 const hooks = registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier === "next/headers") return { url: "data:text/javascript,export async function cookies(){return globalThis.__payoffTestCookies}", shortCircuit: true };
+    if (specifier === "@/lib/supabase/server") return { url: "data:text/javascript,export async function createClient(){return {auth:globalThis.__payoffTestAuth}}", shortCircuit: true };
     if (specifier === "next/server") return nextResolve("next/server.js", context);
     if (specifier.startsWith("@/")) return nextResolve(pathToFileURL(path.join(__dirname, "..", specifier.slice(2)) + ".ts").href, context);
     return nextResolve(specifier, context);
@@ -22,21 +20,27 @@ const { addMonths, monthKey } = require("./payoff-plan.ts");
 const { getSession } = require("./session.ts");
 hooks.deregister();
 
-test("calculator API computes server-side, protects review, and isolates sessions", async (t) => {
+test("calculator API computes server-side, protects review, and isolates users", async (t) => {
   const previous = process.env.APP_ORIGIN;
   process.env.APP_ORIGIN = "http://127.0.0.1:3000";
-  t.after(() => { if (previous === undefined) delete process.env.APP_ORIGIN; else process.env.APP_ORIGIN = previous; delete globalThis.__payoffTestCookies; });
+  t.after(() => { if (previous === undefined) delete process.env.APP_ORIGIN; else process.env.APP_ORIGIN = previous; delete globalThis.__payoffTestAuth; });
   const targetMonth = addMonths(monthKey(new Date()), 12);
   const input = { action: "preview", targetMonth };
   const request = (body = input, extra = {}) => new Request("http://127.0.0.1:3000/api/payoff-plan", { method: "POST", headers: { origin: "http://127.0.0.1:3000", host: "127.0.0.1:3000", "content-type": "application/json", ...extra }, body: JSON.stringify(body) });
-  assert.deepEqual(await (await route.GET()).json(), { plan: null, stale: false, needsRecalculation: false });
+  const stores = () => globalThis.snowballUserStores?.size ?? 0;
+  const signedOutGet = await route.GET();
+  assert.equal(signedOutGet.status, 401);
+  assert.equal(JSON.stringify(await signedOutGet.json()).includes("plan"), false);
   assert.equal((await route.POST(request(input, { origin: "https://foreign.example" }))).status, 403);
   assert.equal((await route.POST(request({ ...input, targetMonth: "2027-13" }))).status, 400);
-  assert.equal(cookie, undefined);
+  assert.equal(stores(), 0, "rejected requests never create a store");
   assert.equal((await route.POST(request(input, { "content-type": "text/plain" }))).status, 400);
   assert.equal((await route.POST(request())).status, 401);
-  const session = await getSession(true);
-  const firstCookie = cookie;
+  assert.equal((await route.POST(request({ ...input, action: "save", quote: "anything" }))).status, 401);
+  assert.equal(stores(), 0, "signed-out requests never create a store");
+  user = "user-a";
+  assert.deepEqual(await (await route.GET()).json(), { plan: null, stale: false, needsRecalculation: false });
+  const session = await getSession();
   const debt = { id: "card", name: "Test card", mask: "1234", balance: 1000, currency: "USD", creditLimit: 2000, minimumPayment: 25, aprs: [{ percentage: 0, type: "purchase_apr" }] };
   session.connections.set("bank", { id: "bank", institution: "Bank", accessToken: "synthetic-private-token", cards: [debt] });
   const response = await route.POST(request());
@@ -79,14 +83,18 @@ test("calculator API computes server-side, protects review, and isolates session
   assert.equal((await route.POST(request())).status, 400);
   assert.deepEqual(session.payoffPlan, updated.estimate);
   debt.minimumPayment = 25;
-  cookie = undefined;
-  assert.equal((await (await route.GET()).json()).plan, null);
+  user = undefined;
+  assert.equal((await route.GET()).status, 401);
   assert.equal((await route.POST(request())).status, 401);
-  const other = await getSession(true);
-  assert.notEqual(cookie, firstCookie);
+  user = "user-b";
+  const other = await getSession();
+  assert.notEqual(other, session);
+  assert.equal(other.connections.size, 0, "another user never sees these cards");
   assert.equal(other.payoffPlan, undefined);
+  assert.equal((await (await route.GET()).json()).plan, null, "another user never sees this plan");
   assert.equal((await route.POST(request())).status, 400);
-  cookie = firstCookie;
+  user = "user-a";
+  assert.equal(await getSession(), session, "signing back in returns the same user's data");
   assert.deepEqual((await (await route.GET()).json()).plan, updated.estimate);
   session.payoffPlan = { years: 2, months: 0, method: "snowball", monthlyBudgetCents: 1 };
   assert.deepEqual(await (await route.GET()).json(), { plan: null, stale: false, needsRecalculation: true });

@@ -8,8 +8,9 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
-    const session = (await getSession(true))!;
+    const session = await getSession();
     const { data } = await plaid().linkTokenCreate({
+      // The Supabase user id: stable and contains no personal details.
       user: { client_user_id: session.id },
       client_name: "Snowball",
       products: [Products.Liabilities],

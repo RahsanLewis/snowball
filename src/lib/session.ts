@@ -1,29 +1,23 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
-import { cookies } from "next/headers";
+import { requireUser } from "@/lib/auth";
 import type { Connection, PayoffPlan } from "./types";
 
 export type StoredConnection = Connection & { accessToken: string };
 type Session = { id: string; connections: Map<string, StoredConnection>; busy: boolean; payoffPlan?: PayoffPlan };
 
-// Preserve local sessions across development hot reloads. Never persist tokens to disk.
-const globalStore = globalThis as typeof globalThis & { snowballSessions?: Map<string, Session> };
-const sessions = globalStore.snowballSessions ??= new Map<string, Session>();
-const cookieName = "snowball_session";
+// Temporary in-memory store keyed by the signed-in user, until connections and plans move to
+// Postgres. Preserved across development hot reloads. Never persist tokens to disk.
+const globalStore = globalThis as typeof globalThis & { snowballUserStores?: Map<string, Session> };
+const sessions = globalStore.snowballUserStores ??= new Map<string, Session>();
 
-export async function getSession(create = false): Promise<Session | null> {
-  const jar = await cookies();
-  const id = jar.get(cookieName)?.value;
-  if (id && sessions.has(id)) return sessions.get(id)!;
-  if (!create) return null;
-  const session: Session = {
-    id: randomBytes(32).toString("hex"), connections: new Map(), busy: false,
-  };
-  sessions.set(session.id, session);
-  jar.set(cookieName, session.id, {
-    httpOnly: true, sameSite: "strict", path: "/",
-    secure: new URL(process.env.APP_ORIGIN ?? "http://127.0.0.1:3000").protocol === "https:",
-  });
+// Throws a 401 RequestError when nobody is signed in.
+export async function getSession(): Promise<Session> {
+  const user = await requireUser();
+  let session = sessions.get(user.id);
+  if (!session) {
+    session = { id: user.id, connections: new Map(), busy: false };
+    sessions.set(user.id, session);
+  }
   return session;
 }
 

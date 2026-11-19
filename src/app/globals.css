@@ -331,3 +331,31 @@ dialog .actions { justify-content: flex-end; margin-top: 1.6rem; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* Sign-in pages: one narrow centered column. */
+.auth { max-width: 24rem; margin: 1.6rem auto 0; }
+.auth .page-title { margin-bottom: 1.6rem; }
+.auth .subtitle { margin-top: -1.05rem; }
+.auth-form { display: flex; flex-direction: column; gap: 1.05rem; }
+.auth-form .notice { margin: 0; }
+.field { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.87rem; color: var(--muted); }
+.field input {
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+}
+.field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+.wide { width: 100%; }
+.divider { display: flex; align-items: center; gap: 0.8rem; margin: 1.3rem 0; color: var(--muted); font-size: 0.87rem; }
+.divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.text-link { align-self: center; color: var(--muted); font-size: 0.95rem; }
+.text-link:hover { color: var(--text); }
+.auth-switch { margin-top: 1.6rem; text-align: center; font-size: 0.95rem; }
+.auth-switch a { color: var(--accent); }
+.account-link { color: var(--muted); font-size: 0.95rem; text-decoration: none; }
+.account-link:hover, .account-link[aria-current="page"] { color: var(--text); }
+.actions.center { justify-content: center; }
