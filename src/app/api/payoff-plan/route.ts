@@ -20,7 +20,7 @@ function quoteFor(estimate: unknown) {
 export async function GET() {
   try {
     const session = await getSession();
-    const saved = session?.payoffPlan;
+    const saved = session.payoffPlan;
     // Earlier manually entered plans must be reviewed in the new calculator, not treated as forecasts.
     if (!saved || saved.version !== 2) return json({ plan: null, needsRecalculation: !!saved, stale: false });
     return json({ plan: saved, needsRecalculation: false,
@@ -39,7 +39,6 @@ export async function POST(request: Request) {
       throw new RequestError("Choose a payoff month after the current month and within the next 100 years.");
     }
     const session = await getSession();
-    if (!session) throw new RequestError("Connect your cards before calculating a payoff plan.", 401);
     return await withSessionLock(session, async () => {
       const connections = publicConnections(session);
       let result;

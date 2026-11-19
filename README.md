@@ -4,11 +4,12 @@ Snowball is a local web app prototype for people who want a clearer picture of t
 
 ## Features
 
+- Sign up or sign in with email and password (with email confirmation and password reset) or Google, through Supabase Auth. Cards and plans belong to the signed-in account.
 - Connect credit-card test accounts through Plaid Link and the Liabilities API.
 - See what matters at a glance on the overview: total USD owed, your payoff plan's monthly payment, and the next payment due.
 - Browse cards by institution on the **Cards** page, and open a card for its balance, credit limit, APRs, minimum payment, due date, and last-fetched time.
 - Refresh available details and disconnect institutions (with confirmation) with all their linked cards.
-- Calculate a session-only Avalanche payoff plan on the **Plan** page by choosing a payoff month and year.
+- Calculate an Avalanche payoff plan on the **Plan** page by choosing a payoff month and year.
 - Review the estimated monthly payment, interest, total paid, and first-month allocations; adjust the timeframe and recalculate before saving.
 - Find calculation assumptions, data notes, and session limitations on the **About** page and in small (i) info pop-ups instead of on the main screens.
 - Use a minimal, responsive interface with automatic light and dark mode.
@@ -27,10 +28,11 @@ Snowball is a local web app prototype for people who want a clearer picture of t
 - Node.js
 - Next.js App Router and API route handlers
 - Plaid SDK using Sandbox
-- In-memory, per-session storage with an opaque HttpOnly session cookie
-- Supabase Postgres schema, migrations (Drizzle), and AES-256-GCM token encryption — groundwork for sign-in and durable storage; the app does not use the database yet
+- Supabase Auth through `@supabase/ssr` (server-side only), with `src/proxy.ts` refreshing sessions and guarding private pages
+- In-memory storage keyed by signed-in user (temporary; moving to Postgres)
+- Supabase Postgres schema, migrations (Drizzle), and AES-256-GCM token encryption — groundwork for durable storage; the app does not read or write the database yet
 
-Access tokens stay in server memory and are excluded from browser responses. Errors exclude raw Plaid responses and credentials. Mutations require the configured origin, and overlapping session mutations are rejected. Local servers bind to loopback.
+Access tokens stay in server memory and are excluded from browser responses. Every API route requires a signed-in user (401 otherwise), and the server verifies the Supabase token's signature rather than trusting the cookie. Sign-in errors never reveal whether an account exists, and post-sign-in redirects only go to paths inside the app. Errors exclude raw Plaid and Supabase responses and credentials. Mutations require the configured origin, and overlapping mutations for the same user are rejected. Local servers bind to loopback.
 
 ## Getting Started
 
@@ -38,8 +40,7 @@ Access tokens stay in server memory and are excluded from browser responses. Err
 
 - Node.js 24 and npm
 - A Plaid account with a client ID and Sandbox secret
-
-The app does not use a database yet. To prepare for the upcoming sign-in and storage work, see [Database setup](#database-setup-in-progress).
+- A Supabase project for sign-in (see [Supabase setup](#supabase-setup))
 
 ### Installation
 
@@ -86,9 +87,9 @@ npm run dev
 
 Open **http://127.0.0.1:3000**. `APP_ORIGIN` must match the browser origin exactly, including the hostname and port. If you use a different port, update the setting to match.
 
-### Database setup (in progress)
+### Supabase setup
 
-Snowball is moving from in-memory sessions to Supabase sign-in and Postgres storage. The schema is ready, but the app does not read or write it yet. To prepare a database:
+Sign-in requires a Supabase project. Connections and plans still live in server memory; the Postgres schema below is ready but not yet used by the app.
 
 1. Create a Supabase project (a separate one for development is recommended).
 2. In `.env.local`, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (Project Settings → API), `DATABASE_URL` (transaction pooler, port 6543), and `MIGRATION_DATABASE_URL` (session pooler or direct connection, port 5432). The publishable key is designed to be public; every other value is a secret.
@@ -99,12 +100,17 @@ Snowball is moving from in-memory sessions to Supabase sign-in and Postgres stor
    ```
 
 4. Apply the migrations in `drizzle/`: `npx drizzle-kit migrate`. This changes the database.
+5. In the Supabase dashboard, under **Authentication → URL Configuration**, set the Site URL to `http://127.0.0.1:3000` (your `APP_ORIGIN`) and add `http://127.0.0.1:3000/auth/callback` as a redirect URL.
+6. Under **Authentication → Email Templates**, change the link in **Confirm signup** to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` and in **Reset password** to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password`. These links work in any browser, unlike the default ones.
+7. For Google sign-in, create an OAuth client in Google Cloud with the authorized redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`, then enter its client ID and secret under **Authentication → Providers → Google**.
+
+Supabase's built-in email service only delivers to your project's team members and sends very few messages per hour. That's enough to test with your own address; configure custom SMTP before letting anyone else sign up.
 
 The tables (`plaid_items`, `payoff_plans`, `account_locks`) have row-level security enabled with no policies, so the browser's public key can't read them; only server code connecting with `DATABASE_URL` can. Access tokens are stored encrypted, bound to their user and Item. `plaid_items` blocks deleting a Supabase user who still has Items, so connected banks are removed at Plaid first.
 
 ## Usage
 
-1. Open the app; no account registration or sign-in is required. Use the header to move between **Overview**, **Cards**, **Plan**, and **About** (the **?** icon).
+1. Open the app and select **Create account** (email and password, then confirm through the emailed link) or **Continue with Google**. Signed-out visitors to private pages are sent to **Sign in** and returned afterwards. Use the header to move between **Overview**, **Cards**, **Plan**, **About** (the **?** icon), and **Account**, where you can change your password or sign out.
 2. Select **Connect credit card** on the overview (or **Connect card** on the Cards page), choose a Sandbox institution supporting Liabilities, and complete its test flow. Use Sandbox test accounts only, never real banking credentials.
 3. The overview shows the total owed, your payoff plan, and the next payment due. Open **Cards** and select a card to review its balance, APR categories, minimum payment, and due date.
 4. Select **Refresh** on the Cards page to fetch the data currently available from Plaid.
@@ -128,7 +134,7 @@ Results are estimates, not guaranteed payoff outcomes. The app does not schedule
 
 Preview and save both calculate on the server. A changed calculation requires a new preview before saving; browser-supplied payment amounts or methods are rejected. The saved target is a fixed calendar month (UTC), not a continuously moving duration. After card data or the calculation month changes, the prior estimate is flagged for recalculation rather than silently replaced. Recalculation initially preserves the target month when it is still in the future; an elapsed target defaults to next month for review. Old manually entered plans require recalculation and are not represented as forecasts.
 
-Plans are stored only in the existing server-memory session, remain available on page reload with the same session cookie, and are lost or inaccessible after server restart or cookie loss. No plan data is written to a database or browser local storage. Calculating or saving a plan does not call Plaid.
+Plans are stored in server memory for the signed-in user, remain available across reloads and sign-ins, and are lost after a server restart. No plan data is written to a database or browser local storage. Calculating or saving a plan does not call Plaid.
 
 ### Testing with Plaid Sandbox
 
@@ -148,11 +154,11 @@ See Plaid's [custom Sandbox user documentation](https://plaid.com/docs/sandbox/u
 
 ### Prototype limitations
 
-This is a single-process local Sandbox prototype. There is no sign-in or durable database. Server restarts lose local connections, and losing the browser session makes stored connections inaccessible. Restarting does **not** revoke Items at Plaid; disconnect institutions before stopping or remove leftover Sandbox Items through Plaid tooling. Memory storage is unsuitable for distributed or long-running public deployments.
+This is a single-process local Sandbox prototype. Sign-in uses Supabase, but connections and plans are not yet stored durably: server restarts lose them. Restarting does **not** revoke Items at Plaid; disconnect institutions before stopping or remove leftover Sandbox Items through Plaid tooling. Memory storage is unsuitable for distributed or long-running public deployments.
 
 Debt fields depend on the institution. Missing values display as “Not provided”; zero is preserved. The overview sums only returned USD balances and shows how many cards are included. After a refresh error, it can include previously fetched data. Refreshing does not guarantee live institution data; the timestamp records when this app fetched details.
 
-Reconnecting the same institution can create duplicate Items/cards and double-count balances. Disconnect the earlier connection first. OAuth redirect/resume flows, automatic updates/webhooks, production access, persistent authentication/storage, issuer-specific minimum-payment formulas, and payment scheduling are future work.
+Reconnecting the same institution can create duplicate Items/cards and double-count balances. Disconnect the earlier connection first. OAuth redirect/resume flows, automatic updates/webhooks, production access, durable storage, account deletion, issuer-specific minimum-payment formulas, and payment scheduling are future work.
 
 See the [Plaid Quickstart](https://plaid.com/docs/quickstart/), [Liabilities documentation](https://plaid.com/docs/liabilities/), and [Sandbox documentation](https://plaid.com/docs/sandbox/) for integration and test-flow details.
 
@@ -168,25 +174,40 @@ snowball/
 │   │   │   └── plaid/
 │   │   │       ├── exchange/route.ts     # Exchange tokens and fetch details
 │   │   │       └── link-token/route.ts   # Create a Liabilities Link token
-│   │   ├── about/page.tsx               # Assumptions, data, sandbox, and session notes
+│   │   ├── (auth)/
+│   │   │   ├── actions.ts               # Server Actions: sign in/up, Google, reset, sign out
+│   │   │   ├── sign-in/page.tsx
+│   │   │   ├── sign-up/page.tsx
+│   │   │   ├── forgot-password/page.tsx
+│   │   │   └── reset-password/page.tsx  # Choose a new password (needs a session)
+│   │   ├── auth/
+│   │   │   ├── callback/route.ts        # Finishes Google sign-in
+│   │   │   └── confirm/route.ts         # Email confirmation and reset links
+│   │   ├── about/page.tsx               # Assumptions, data, sandbox, and account notes
+│   │   ├── account/page.tsx             # Email, sign-in method, change password, sign out
 │   │   ├── cards/
 │   │   │   ├── page.tsx                 # Cards grouped by institution
 │   │   │   └── [id]/page.tsx            # One card's details and disconnect
 │   │   ├── plan/page.tsx                # Payoff plan calculator
 │   │   ├── globals.css                  # Design tokens, light/dark themes, components
 │   │   ├── layout.tsx                   # Header, status line, shared connection state
-│   │   └── page.tsx                     # Overview
+│   │   └── page.tsx                     # Overview, or landing when signed out
 │   ├── db/
 │   │   ├── client.ts                    # Server-only Postgres connection (Drizzle)
 │   │   └── schema.ts                    # Tables, row-level security, foreign keys
 │   ├── components/
-│   │   ├── app-header.tsx               # Navigation
+│   │   ├── app-header.tsx               # Navigation and account link
+│   │   ├── auth-form.tsx                # Shared sign-in form and Google button
 │   │   ├── cards.tsx                    # Card list and card detail
 │   │   ├── connections-provider.tsx     # Shared connections, Plaid Link, status messages
 │   │   ├── dashboard.tsx                # Overview: total, plan summary, next payment
 │   │   ├── info-tip.tsx                 # (i) info pop-ups
+│   │   ├── landing.tsx                  # Signed-out home
 │   │   └── payoff-plan.tsx              # Timeframe calculator, saved estimate, plan summary
+│   ├── proxy.ts                         # Session refresh and private-page redirects
 │   └── lib/
+│       ├── auth.ts                      # Current user, redirect safety, auth error messages
+│       ├── auth.test.cjs                # Auth helper tests
 │       ├── crypto.ts                    # Access-token encryption (AES-256-GCM)
 │       ├── crypto.test.cjs              # Encryption tests
 │       ├── format.ts                    # Money and date display formatting
@@ -196,8 +217,9 @@ snowball/
 │       ├── plaid.ts                     # Sandbox client and field mapping
 │       ├── payoff-plan.ts               # Validation, allocation, and payoff simulation
 │       ├── payoff-plan.test.cjs         # Calculator and ranking tests
-│       ├── payoff-plan-api.test.cjs     # API and session isolation tests
-│       ├── session.ts                   # Session and token storage
+│       ├── payoff-plan-api.test.cjs     # API, sign-in requirement, and user isolation tests
+│       ├── session.ts                   # Per-user in-memory connection and plan storage
+│       ├── supabase/server.ts           # Server-only Supabase client
 │       ├── summary.ts                   # Total owed and next payment due
 │       ├── summary.test.cjs             # Overview summary tests
 │       └── types.ts
@@ -222,14 +244,14 @@ Before each commit, review this README and update it when changes affect feature
 
 ### Review and verification
 
-Automated tests cover origin validation, payoff calculations, interest rounding, minimums, Avalanche allocations, input validation and ordering, session-isolated plan API behavior, overview totals and next-payment selection, display formatting, and access-token encryption (tampering, wrong keys, and tokens moved between users are rejected). There are no automated React component tests; check UI behavior in a browser walkthrough. API tests use local mocks and do not contact Plaid. Developer review remains required.
+Automated tests cover origin validation, payoff calculations, interest rounding, minimums, Avalanche allocations, input validation and ordering, signed-in-only, user-isolated plan API behavior, sign-in redirect safety and error messages, overview totals and next-payment selection, display formatting, and access-token encryption (tampering, wrong keys, and tokens moved between users are rejected). There are no automated React component tests; check UI behavior in a browser walkthrough. API tests use local mocks and do not contact Plaid or Supabase. Developer review remains required.
 
 Available checks, subject to the approval workflow:
 
 - `node --conditions=react-server --experimental-transform-types --test src/lib/*.test.cjs` — local unit and API tests; transforms TypeScript in memory.
 - `npm run typecheck` — TypeScript validation without incremental cache output.
 - `npm run build` — production compilation; writes `.next/` and may update generated Next.js typings.
-- `npm run dev` — local browser walkthrough; writes development output to `.next/` and calls Plaid Sandbox when connecting, refreshing, or disconnecting.
+- `npm run dev` — local browser walkthrough; writes development output to `.next/` and calls Supabase when signing in and Plaid Sandbox when connecting, refreshing, or disconnecting.
 - `npx drizzle-kit generate` — writes a new migration to `drizzle/` after schema changes; needs no database.
 - `npx drizzle-kit migrate` — applies migrations to the database in `MIGRATION_DATABASE_URL` (or `DATABASE_URL`).
 

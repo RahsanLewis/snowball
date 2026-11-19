@@ -8,7 +8,6 @@ export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
     const session = await getSession();
-    if (!session) throw new RequestError("Your local session expired. Connect your card again.", 401);
     const body = await readBody(request);
     if (typeof body.publicToken !== "string" || !/^public-sandbox-[a-zA-Z0-9-]+$/.test(body.publicToken)) {
       throw new RequestError("A valid Sandbox connection is required.");
