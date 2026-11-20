@@ -6,6 +6,7 @@ import { signIn, signInWithGoogle } from "../actions";
 const linkErrors: Record<string, string> = {
   link: "That link is invalid or has expired. Please try again.",
   google: "Google sign-in didn’t complete. Please try again.",
+  callback: "Sign-in didn’t complete, or the link has expired. Please try again.",
 };
 
 export default async function SignInPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
