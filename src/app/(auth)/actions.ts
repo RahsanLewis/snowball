@@ -42,7 +42,7 @@ export async function signUp(_state: FormState, form: FormData): Promise<FormSta
   if (problem) return { error: problem };
   const client = await supabase();
   if (!client) return { error: unavailable };
-  const { error } = await client.auth.signUp({ email, password, options: { emailRedirectTo: appUrl("/") } });
+  const { error } = await client.auth.signUp({ email, password, options: { emailRedirectTo: appUrl("/auth/callback?next=/") } });
   // An existing account gets the same reply, so sign-up can't be used to find out who has one.
   if (error && !["user_already_exists", "email_exists"].includes(error.code ?? "")) return { error: authErrorMessage("sign-up", error) };
   return { done: "Check your email for a link to confirm your account." };
@@ -63,7 +63,7 @@ export async function requestPasswordReset(_state: FormState, form: FormData): P
   if (!validEmail(email)) return { error: "Enter a valid email address." };
   const client = await supabase();
   if (!client) return { error: unavailable };
-  const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: appUrl("/reset-password") });
+  const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: appUrl("/auth/callback?next=/reset-password") });
   if (error && error.status === 429) return { error: authErrorMessage("reset", error) };
   // Same reply whether or not the account exists.
   return { done: "If an account exists for that email, we’ve sent a link to reset your password." };

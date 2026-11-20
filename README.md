@@ -100,8 +100,8 @@ Sign-in requires a Supabase project. Connections and plans still live in server 
    ```
 
 4. Apply the migrations in `drizzle/`: `npx drizzle-kit migrate`. This changes the database.
-5. In the Supabase dashboard, under **Authentication → URL Configuration**, set the Site URL to `http://127.0.0.1:3000` (your `APP_ORIGIN`) and add `http://127.0.0.1:3000/auth/callback` as a redirect URL.
-6. Under **Authentication → Email Templates**, change the link in **Confirm signup** to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` and in **Reset password** to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password`. These links work in any browser, unlike the default ones.
+5. In the Supabase dashboard, under **Authentication → URL Configuration**, set the Site URL to `http://127.0.0.1:3000` (your `APP_ORIGIN`) and add `http://127.0.0.1:3000/**` as a redirect URL. (Sign-in links include a return path, so an exact callback URL is not enough.)
+6. Optional, and only possible after setting up custom SMTP: under **Authentication → Email Templates**, change the link in **Confirm signup** to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` and in **Reset password** to `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password`. These links work in any browser. With the default templates, confirmation and reset links go through `/auth/callback` and must be opened in the same browser where you signed up or requested the reset; otherwise sign-in shows that the link has expired.
 7. For Google sign-in, create an OAuth client in Google Cloud with the authorized redirect URI `https://<project-ref>.supabase.co/auth/v1/callback`, then enter its client ID and secret under **Authentication → Providers → Google**.
 
 Supabase's built-in email service only delivers to your project's team members and sends very few messages per hour. That's enough to test with your own address; configure custom SMTP before letting anyone else sign up.
