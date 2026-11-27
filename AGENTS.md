@@ -13,3 +13,17 @@ This file adds Snowball-specific requirements and does not weaken the shared saf
 - Update the affected sections to describe the actual implementation; do not present planned capabilities as existing features.
 - If no README update is needed, state that in the change summary.
 - This rule does not authorize automatic rewrites, Git hooks, commits, or changes outside the approved scope. Preserve all existing approval and review gates and Git restrictions.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `RahsanLewis/snowball`, managed with the `gh` CLI; every write needs prior developer approval. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root, created only when needed. See `docs/agents/domain.md`.
