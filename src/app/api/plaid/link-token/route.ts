@@ -1,17 +1,17 @@
 import { CountryCode, CreditAccountSubtype, Products } from "plaid";
 import { assertSameOrigin, failure, json } from "@/lib/http";
 import { plaid } from "@/lib/plaid";
-import { getSession } from "@/lib/session";
+import { requireUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
-    const session = await getSession();
+    const user = await requireUser();
     const { data } = await plaid().linkTokenCreate({
       // The Supabase user id: stable and contains no personal details.
-      user: { client_user_id: session.id },
+      user: { client_user_id: user.id },
       client_name: "Snowball",
       products: [Products.Liabilities],
       country_codes: [CountryCode.Us],

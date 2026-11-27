@@ -37,12 +37,16 @@ export function errorMessage(error: unknown): string {
   if (code === "INVALID_CREDENTIALS" || (error instanceof Error && error.message === "PLAID_NOT_CONFIGURED")) {
     return "Add your Plaid client ID and Sandbox secret to .env.local, then restart the app.";
   }
+  const message = error instanceof Error ? error.message : "";
+  if (message === "TOKEN_UNREADABLE") return "This connection can’t be read anymore. Disconnect it, then connect again.";
+  if (message === "DATABASE_NOT_CONFIGURED") return "Add DATABASE_URL to .env.local, then restart the app.";
+  if (message.startsWith("TOKEN_ENCRYPTION_KEY")) return "Add a valid TOKEN_ENCRYPTION_KEY to .env.local, then restart the app.";
   return "We couldn’t reach your card details. Please try again.";
 }
 
 export function failure(error: unknown) {
   if (error instanceof RequestError) return json({ error: error.message }, error.status);
-  if (error instanceof Error && error.message === "SESSION_BUSY") {
+  if (error instanceof Error && error.message === "ACCOUNT_BUSY") {
     return json({ error: "Another account action is in progress. Please try again shortly." }, 409);
   }
   return json({ error: errorMessage(error) }, 502);

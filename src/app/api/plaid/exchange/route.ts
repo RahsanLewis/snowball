@@ -1,30 +1,32 @@
+import { requireUser } from "@/lib/auth";
 import { assertSameOrigin, errorMessage, failure, json, readBody, RequestError } from "@/lib/http";
-import { plaid, refreshConnection } from "@/lib/plaid";
-import { getSession, publicConnections, withSessionLock, type StoredConnection } from "@/lib/session";
+import { fetchCards, plaid } from "@/lib/plaid";
+import { addConnection, listConnections, markConnectionError, saveCards, withAccountLock } from "@/lib/store";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
     assertSameOrigin(request);
-    const session = await getSession();
+    const user = await requireUser();
     const body = await readBody(request);
     if (typeof body.publicToken !== "string" || !/^public-sandbox-[a-zA-Z0-9-]+$/.test(body.publicToken)) {
       throw new RequestError("A valid Sandbox connection is required.");
     }
     const publicToken = body.publicToken;
-    return await withSessionLock(session, async () => {
+    return await withAccountLock(user.id, async () => {
       const { data } = await plaid().itemPublicTokenExchange({ public_token: publicToken });
-      const connection: StoredConnection = {
-        id: data.item_id, accessToken: data.access_token,
-        institution: typeof body.institution === "string" ? body.institution.slice(0, 150) : "Connected institution",
-        cards: [], fetchedAt: null, error: null,
-      };
+      const institution = typeof body.institution === "string" ? body.institution.slice(0, 150) : "Connected institution";
       // Save before fetching so temporary data errors do not lose the connection.
-      session.connections.set(connection.id, connection);
-      try { await refreshConnection(connection); }
-      catch (error) { connection.error = errorMessage(error); }
-      return json({ connections: publicConnections(session) });
+      try { await addConnection(user.id, { id: data.item_id, institution, accessToken: data.access_token }); }
+      catch {
+        // Plaid already created the Item; revoke it so nothing is left behind unsaved.
+        await plaid().itemRemove({ access_token: data.access_token }).catch(() => {});
+        throw new RequestError("We couldn’t save this connection. Please try again.", 500);
+      }
+      try { await saveCards(user.id, data.item_id, await fetchCards(data.access_token)); }
+      catch (error) { await markConnectionError(user.id, data.item_id, errorMessage(error)); }
+      return json({ connections: await listConnections(user.id) });
     });
   } catch (error) { return failure(error); }
 }

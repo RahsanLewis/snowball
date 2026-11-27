@@ -104,9 +104,9 @@ export function ConnectionsProvider({ enabled, children }: { enabled: boolean; c
     setBusy(method === "DELETE" ? "Disconnecting institution" : "Refreshing details"); setError(""); setMessage(null);
     try {
       const result = await api<DashboardData>("/api/connections", method, id ? { id } : undefined);
-      setData(result);
+      setData({ connections: result.connections });
       setMessage(method === "DELETE"
-        ? { text: "Institution disconnected.", path: "/cards" }
+        ? { text: result.notice ?? "Institution disconnected.", path: "/cards" }
         : { text: result.connections.some((item) => item.error) ? "Some details couldn’t refresh." : "Card details refreshed.", path: path.current });
       return true;
     } catch (error) { setError(error instanceof Error ? error.message : "Couldn’t update your connections."); return false; }

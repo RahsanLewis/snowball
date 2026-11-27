@@ -1,6 +1,6 @@
 import "server-only";
 import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
-import type { StoredConnection } from "./session";
+import type { Card } from "./types";
 
 export function plaid() {
   const clientId = process.env.PLAID_CLIENT_ID;
@@ -12,10 +12,11 @@ export function plaid() {
   }));
 }
 
-export async function refreshConnection(connection: StoredConnection) {
-  const { data } = await plaid().liabilitiesGet({ access_token: connection.accessToken });
+// Fetches a connection's current credit cards from Plaid. Callers decide where to save them.
+export async function fetchCards(accessToken: string): Promise<{ cards: Card[]; fetchedAt: string }> {
+  const { data } = await plaid().liabilitiesGet({ access_token: accessToken });
   const liabilities = new Map((data.liabilities.credit ?? []).map((item) => [item.account_id, item]));
-  connection.cards = data.accounts.filter((account) => account.type === "credit" && account.subtype === "credit card").map((account) => {
+  const cards = data.accounts.filter((account) => account.type === "credit" && account.subtype === "credit card").map((account) => {
     const liability = liabilities.get(account.account_id);
     return {
       id: account.account_id,
@@ -29,6 +30,5 @@ export async function refreshConnection(connection: StoredConnection) {
       aprs: (liability?.aprs ?? []).map((apr) => ({ percentage: apr.apr_percentage, type: apr.apr_type })),
     };
   });
-  connection.fetchedAt = new Date().toISOString();
-  connection.error = null;
+  return { cards, fetchedAt: new Date().toISOString() };
 }
