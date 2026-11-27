@@ -250,7 +250,7 @@ Read the shared instructions in `AGENTS.md` in the parent folder (`../AGENTS.md`
 
 Agent skills read their per-repo settings from `docs/agents/`: issues are tracked in GitHub Issues, triage uses the default label names, and domain docs (`GLOSSARY.md`, `docs/adr/`) are created only when needed. The `## Agent skills` section of `AGENTS.md` summarizes them.
 
-Before each commit, review this README and update it when changes affect features, setup, dependencies, configuration, usage, project structure, or limitations. If no documentation change is needed, note that in the change summary. Human contributors should use Conventional Commits. Agents may commit and push feature branches under the shared rules (never `main`, never force-push); the developer opens pull requests, merges into `main`, and handles publication and deployment.
+Before each commit, review this README and update it when changes affect features, setup, dependencies, configuration, usage, project structure, or limitations. If no documentation change is needed, note that in the change summary. Human contributors should use Conventional Commits. Agents may commit, push feature branches, and open pull requests under the shared rules (never `main`, never force-push); the developer reviews and merges pull requests and handles publication and deployment.
 
 ### Review and verification
 
