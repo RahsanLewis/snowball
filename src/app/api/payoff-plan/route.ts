@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { assertSameOrigin, failure, json, readBody, RequestError } from "@/lib/http";
 import { calculatePlan, monthKey, monthsUntilTarget } from "@/lib/payoff-plan";
-import { getSession, publicConnections, withSessionLock } from "@/lib/session";
+import { requireUser } from "@/lib/auth";
+import { getPayoffPlan, listConnections, savePayoffPlan, withAccountLock } from "@/lib/store";
 import type { Connection } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -19,12 +20,12 @@ function quoteFor(estimate: unknown) {
 
 export async function GET() {
   try {
-    const session = await getSession();
-    const saved = session.payoffPlan;
+    const user = await requireUser();
+    const saved = await getPayoffPlan(user.id);
     // Earlier manually entered plans must be reviewed in the new calculator, not treated as forecasts.
     if (!saved || saved.version !== 2) return json({ plan: null, needsRecalculation: !!saved, stale: false });
     return json({ plan: saved, needsRecalculation: false,
-      stale: saved.sourceFingerprint !== fingerprint(publicConnections(session)) || saved.startMonth !== monthKey(new Date()) });
+      stale: saved.sourceFingerprint !== fingerprint(await listConnections(user.id)) || saved.startMonth !== monthKey(new Date()) });
   } catch (error) { return failure(error); }
 }
 
@@ -38,9 +39,9 @@ export async function POST(request: Request) {
       || !["preview", "save"].includes(body.action as string) || duration === null) {
       throw new RequestError("Choose a payoff month after the current month and within the next 100 years.");
     }
-    const session = await getSession();
-    return await withSessionLock(session, async () => {
-      const connections = publicConnections(session);
+    const user = await requireUser();
+    return await withAccountLock(user.id, async () => {
+      const connections = await listConnections(user.id);
       let result;
       try { result = calculatePlan(connections, duration, now); }
       catch (error) { throw new RequestError(error instanceof Error ? error.message : "Couldn’t calculate your plan."); }
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       const quote = quoteFor(estimate);
       if (body.action === "preview") return json({ estimate, quote });
       if (body.quote !== quote) throw new RequestError("Your card details or calculation month changed. Recalculate and review the updated payment before saving.", 409);
-      session.payoffPlan = estimate;
+      await savePayoffPlan(user.id, estimate);
       return json({ plan: estimate, stale: false, needsRecalculation: false });
     });
   } catch (error) { return failure(error); }

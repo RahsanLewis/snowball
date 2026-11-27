@@ -9,7 +9,7 @@ const hooks = registerHooks({
     return nextResolve(specifier === "next/server" ? "next/server.js" : specifier, context);
   },
 });
-const { assertSameOrigin, RequestError } = require("./http.ts");
+const { assertSameOrigin, errorMessage, RequestError } = require("./http.ts");
 hooks.deregister();
 
 test("configured origin and host validation", async (t) => {
@@ -64,4 +64,12 @@ test("configured origin and host validation", async (t) => {
     assert.doesNotThrow(() => assertSameOrigin(req));
     assert.throws(() => assertSameOrigin(request({ origin: "http://127.0.0.1:3000", host: "127.0.0.1:3000" })), RequestError);
   });
+});
+
+test("missing storage setup and unreadable tokens get specific messages", () => {
+  assert.equal(errorMessage(new Error("DATABASE_NOT_CONFIGURED")), "Add DATABASE_URL to .env.local, then restart the app.");
+  assert.equal(errorMessage(new Error("TOKEN_ENCRYPTION_KEY is not set.")), "Add a valid TOKEN_ENCRYPTION_KEY to .env.local, then restart the app.");
+  assert.equal(errorMessage(new Error("TOKEN_ENCRYPTION_KEY must be 32 random bytes encoded as base64.")), "Add a valid TOKEN_ENCRYPTION_KEY to .env.local, then restart the app.");
+  assert.equal(errorMessage(new Error("TOKEN_UNREADABLE")), "This connection can’t be read anymore. Disconnect it, then connect again.");
+  assert.equal(errorMessage(new Error("something else")), "We couldn’t reach your card details. Please try again.");
 });

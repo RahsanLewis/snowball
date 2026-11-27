@@ -18,7 +18,8 @@ export type Connection = {
   error: string | null;
 };
 
-export type DashboardData = { connections: Connection[] };
+// `notice` carries a warning that should replace the usual success message.
+export type DashboardData = { connections: Connection[]; notice?: string };
 
 export type PlanPayment = {
   connectionId: string;
