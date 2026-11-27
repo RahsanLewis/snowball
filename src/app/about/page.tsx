@@ -26,8 +26,8 @@ export default function AboutPage() {
     <p>This prototype uses Plaid Sandbox with test accounts only. Never enter real bank credentials. Reconnecting the same institution can create duplicate cards, so disconnect the earlier connection first.</p>
 
     <h2 id="session">Sessions and storage</h2>
-    <p>You sign in with email and password or Google, and your connections and saved plan belong to your account; nobody else signed in can see them. For now they’re still kept in server memory, so restarting the server clears them until durable storage is added.</p>
-    <p>Restarting the server doesn’t disconnect institutions at Plaid. Disconnect them in Snowball (from a card’s page, or the Cards page for an institution without cards) before stopping the server.</p>
+    <p>You sign in with email and password or Google, and your connections and saved plan belong to your account; nobody else signed in can see them. They’re stored with your account and kept across server restarts.</p>
+    <p>Disconnecting removes an institution’s connection at Plaid and from Snowball. Disconnect from a card’s page, or from the Cards page for an institution without cards.</p>
 
     <p><Link href="/">Back to Snowball</Link></p>
   </article>;
